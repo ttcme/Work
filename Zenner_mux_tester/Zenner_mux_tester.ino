@@ -7,15 +7,18 @@
 #define MOSI 11
 #define SS 10
 //slave select pins
-#define ADC_SS 2
-#define MUX_SS 3
-#define SD_SS 4
+#define ADC_SS 0
+#define MUX_SS 1
+#define SD_SS 2
 //define input pins
 #define STOP_PIN 7
 #define N_DRDY 8
 #define TEMP_PIN A0
 // define output pins
-#define C_CONTROL 6
+#define C_CONTROL1 9
+#define C_CONTROL2 6
+#define C_CONTROL3 5
+#define C_CONTROL4 3
 //SPI MODES:          (must be set correctly before the SPI bus is used)
 // MUX : SPI_MODE2
 // ADC : SPI_MODE3
@@ -30,9 +33,21 @@
 File datalog;
 long sample_period = 10000; //complete sample set 10 seconds after last sample completion
 
-void Set_Current(int current){ //current in mA
-  current = current/4;          // 0-1000 mA is approx scaled to 0-255, actually to 250
-  analogWrite(C_CONTROL, current);
+void Set_Current(int lookupselect){
+  const unsigned int CURRENTLOOKUP[] = {0 , 1000, 4, 200, 8, 20, 500, 100, 48}; //current in mA
+  int current[] = {0,0,0,0};                                                    // alternation high and low current to prevent extended periods of heating
+  for (int x=0; x<4 ; x++){
+    int lookupuse = lookupselect + x;
+    if (lookupuse > 8){ //allow lookupuse to wrap around CURRENTLOOKUP
+      lookupuse = lookupuse - 9;
+    }
+    current[x] = CURRENTLOOKUP[lookupuse] / 4;    // 0-1000 mA is approx scaled to 0-255, actually to 250
+  }
+  
+  analogWrite(C_CONTROL1, current[0]);
+  analogWrite(C_CONTROL2, current[1]);
+  analogWrite(C_CONTROL3, current[2]);
+  analogWrite(C_CONTROL4, current[3]);
 }
 void Select(int sel){
   if (sel == NONE){
@@ -134,7 +149,7 @@ void loop() {
   int holder = 0; //used for transient storage of higher or lower byte from adc
   long voltage = 0;
   delay(sample_period);
-  const unsigned int CURRENTLOOKUP[] = {0 , 1000, 4, 500, 8, 200, 20, 100, 48}; // alternation high and low current to prevent extended periods of heating
+  
   datalog.print(Read_Temp());
   datalog.print(",");
   //asumed order of mux connections. 1:zener1 current
@@ -142,7 +157,7 @@ void loop() {
                            //       3:zener2 current
                             //      4:       voltage etc..
   for (int incursel = 0 ; incursel <=8;incursel++){
-    Set_Current(CURRENTLOOKUP[incursel]);
+    Set_Current(incursel);
     delay(1);
     for (int x=1; x<=8; x++){
       int y =2*x+1;
